@@ -21,6 +21,7 @@ app.add_middleware(
 
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 class PlayerData(BaseModel):
     status: str
     data: list
@@ -41,8 +42,8 @@ async def coach_advice(player_data: PlayerData, request: Request):
     stats = player_data.data[0]
 
     prompt = f"""
-    You are an expert football coach AI. Analyze the following player's match performance stats
-    and give constructive, motivational advice. Focus on both strengths and areas to improve.
+    You are an expert football coach AI. Analyze the player's match stats and give short,
+    motivational advice.
 
     Player Stats:
     Position: {stats.get("position")}
@@ -76,10 +77,11 @@ async def coach_advice(player_data: PlayerData, request: Request):
     Power: {stats.get("power_trend")}
 
     Write the advice as:
-    - Highlight key strengths with praise.
-    - Point out 2–3 specific areas to improve.
-    - Give practical, position-specific training tips.
-    - Keep tone encouraging, as if motivating a real player.
+    - 1–2 key strengths (praise).
+    - 2 areas to improve (specific).
+    - 1 short training tip.
+    Keep it under 2000 characters total.
+    Keep tone encouraging and concise.
     """
 
     try:
@@ -90,11 +92,17 @@ async def coach_advice(player_data: PlayerData, request: Request):
                 {"role": "system", "content": "You are a professional football coach."},
                 {"role": "user", "content": prompt}
             ],
+            # 2000 chars ≈ 350–400 tokens, so cap at 400 tokens
             max_tokens=400,
             temperature=0.7,
         )
 
         advice = response.choices[0].message.content
+
+        # Safety check in case model goes beyond limit
+        if len(advice) > 2000:
+            advice = advice[:2000] + "..."
+
         logger.info("✅ Received advice from OpenAI API")
 
     except Exception as e:
@@ -103,5 +111,4 @@ async def coach_advice(player_data: PlayerData, request: Request):
 
     logger.info("📤 Returning advice to client")
     return {"advice": advice}
-
 
