@@ -1,5 +1,3 @@
-import os
-import random
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from openai import OpenAI
@@ -22,7 +20,6 @@ app.add_middleware(
 
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 class PlayerData(BaseModel):
     status: str
     data: list
@@ -30,73 +27,9 @@ class PlayerData(BaseModel):
     avg: float
     point: int
 
-# -------------------------
-# Multiple prompt templates
-# -------------------------
-PROMPT_TEMPLATES = [
-    # Style 1: Motivational + strengths + improvement
-    """
-    You are an expert football coach AI. Analyze the following player's match performance
-    and give constructive, motivational advice. Be inspiring but also realistic.
-
-    Player Stats:
-    {stats}
-
-    Write the advice as:
-    - Highlight key strengths with praise.
-    - Mention 2–3 areas to improve.
-    - Give practical training tips.
-    - Keep the tone like a supportive coach.
-    """,
-
-    # Style 2: Tactical feedback
-    """
-    You are a tactical football coach. Based on the player’s stats below,
-    provide feedback that mixes technical analysis with mindset coaching.
-
-    Player Stats:
-    {stats}
-
-    Write the advice as:
-    - Focus on tactical awareness and positioning.
-    - Highlight 1–2 strong attributes.
-    - Suggest drills or practice methods.
-    - End with a motivating message.
-    """,
-
-    # Style 3: Personal trainer approach
-    """
-    You are acting as a personal football trainer for this player.
-    Analyze the stats and create a short improvement plan.
-
-    Player Stats:
-    {stats}
-
-    Write the advice as:
-    - Point out fitness & stamina elements.
-    - Suggest skill-based exercises.
-    - Provide 1 mental/psychological tip.
-    - Keep it short and actionable.
-    """,
-
-    # Style 4: Match commentary style
-    """
-    Imagine you are a football commentator turned coach.
-    Analyze the player's stats as if reviewing their match highlights.
-
-    Player Stats:
-    {stats}
-
-    Write the advice as:
-    - Praise strong "moments".
-    - Mention weak points as "missed opportunities".
-    - Suggest training improvements.
-    - Keep tone energetic and engaging.
-    """,
-]
-
 @app.post("/coach")
 async def coach_advice(player_data: PlayerData, request: Request):
+    # Log incoming request info
     logger.info("📥 Received request from: %s", request.client.host)
     logger.info("📥 Payload: %s", player_data.json())
 
@@ -106,19 +39,55 @@ async def coach_advice(player_data: PlayerData, request: Request):
 
     stats = player_data.data[0]
 
-    # Convert stats dict into a readable string
-    stats_str = "\n".join([f"{k}: {v}" for k, v in stats.items()])
+    prompt = f"""
+    You are an expert football coach AI. Analyze the following player's match performance stats
+    and give constructive, motivational advice. Focus on both strengths and areas to improve.
 
-    # Pick a random template
-    selected_prompt = random.choice(PROMPT_TEMPLATES).format(stats=stats_str)
+    Player Stats:
+    Position: {stats.get("position")}
+    Goals: {stats.get("goals")}
+    Assists: {stats.get("assists")}
+    Time Played: {stats.get("time")} minutes
+    Streak: {stats.get("streak")}
+
+    Technical Attributes:
+    Two-Footed: {stats.get("twoFooted", {}).get("value")}
+    Dribbling: {stats.get("dribbling", {}).get("value")}
+    First Touch: {stats.get("firstTouch", {}).get("value")}
+    Agility: {stats.get("agility", {}).get("value")}
+    Speed: {stats.get("speed", {}).get("value")}
+    Power: {stats.get("power", {}).get("value")}
+
+    Highlights:
+    Workrate: {stats.get("highlights", {}).get("workrate")}
+    Ball Possessions: {stats.get("highlights", {}).get("ballPossessions")}
+    Total Distance: {stats.get("highlights", {}).get("totalDistance")} km
+    Sprint Distance: {stats.get("highlights", {}).get("sprintDistance")} km
+    Top Speed: {stats.get("highlights", {}).get("topSpeed")}
+    Kicking Power: {stats.get("highlights", {}).get("kickingPower")}
+
+    Trends:
+    Two-footed: {stats.get("two_footed_trend")}
+    Dribbling: {stats.get("dribbling_trend")}
+    First Touch: {stats.get("first_touch_trend")}
+    Agility: {stats.get("agility_trend")}
+    Speed: {stats.get("speed_trend")}
+    Power: {stats.get("power_trend")}
+
+    Write the advice as:
+    - Highlight key strengths with praise.
+    - Point out 2–3 specific areas to improve.
+    - Give practical, position-specific training tips.
+    - Keep tone encouraging, as if motivating a real player.
+    """
 
     try:
-        logger.info("🤖 Sending request to OpenAI API with random prompt...")
+        logger.info("🤖 Sending request to OpenAI API...")
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a professional football coach."},
-                {"role": "user", "content": selected_prompt}
+                {"role": "user", "content": prompt}
             ],
             max_tokens=400,
             temperature=0.7,
@@ -133,3 +102,5 @@ async def coach_advice(player_data: PlayerData, request: Request):
 
     logger.info("📤 Returning advice to client")
     return {"advice": advice}
+
+
